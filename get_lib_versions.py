@@ -1,31 +1,11 @@
 import importlib.metadata
 packages = [
-    "beautifulsoup4",
-    "ddgs",
-    "FASTAPI",
-    "html5lib",
-    "jinja2",
-    "langchain",
-    "langchain-astradb",
-    "langchain-google-genai",
-    "langchain-groq",
-    "langchain-mcp-adapters",
-    "langchain-openai",
-    "langchain_core",
-    "langgraph",
-    "lxml",
-    "mcp",
-    "python-dotenv",
-    "python-multipart",
-    "pypdf",
     "ragas",
-    "selenium",
-    "streamlit",
-    "structlog",
-    "undetected-chromedriver",
-    "uvicorn"
-]
-
+    "langchain-mcp-adapters",
+    "mcp",
+    "ddgs",
+    "langchain-openai"
+    ]
 for pkg in packages:
     try:
         version = importlib.metadata.version(pkg)
