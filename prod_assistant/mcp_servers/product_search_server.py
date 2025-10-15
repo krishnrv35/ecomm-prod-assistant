@@ -2,6 +2,12 @@ from mcp.server.fastmcp import FastMCP
 from retriever.retrieval import Retriever  
 from langchain_community.tools import DuckDuckGoSearchRun
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file BEFORE other imports
+
+
+# Rest of your code...
+
 # Initialize MCP server
 mcp = FastMCP("hybrid_search")
 
@@ -52,5 +58,4 @@ async def web_search(query: str) -> str:
 
 # ---------- Run Server ----------
 if __name__ == "__main__":
-    #mcp.run(transport="stdio")
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="stdio")  # ✓ Changed to stdio

@@ -13,56 +13,54 @@ from evaluation.ragas_eval import evaluate_context_precision, evaluate_response_
 from langchain_mcp_adapters.client import MultiServerMCPClient
 import asyncio
 
+from dotenv import load_dotenv
+load_dotenv()
+
+
 class AgenticRAG:
     """Agentic RAG pipeline using LangGraph + MCP (Retriever + WebSearch)."""
 
     class AgentState(TypedDict):
         messages: Annotated[Sequence[BaseMessage], add_messages]
 
-    # ---------- Initialization ----------
     def __init__(self):
         self.retriever_obj = Retriever()
         self.model_loader = ModelLoader()
         self.llm = self.model_loader.load_llm()
         self.checkpointer = MemorySaver()
+        self.mcp_tools = []
 
-        # Initialize MCP client
-        self.mcp_client = MultiServerMCPClient(
-            {
-                "hybrid_search": {
-                    "transport": "streamable_http",
-                    "url": "http://localhost:8000/mcp"
-                }
+        # Initialize MCP client for stdio
+        self.mcp_client = MultiServerMCPClient({
+            "hybrid_search": {
+                "command": "python",
+                "args": [
+                    r"C:\Users\ravik\llmops\ecomm-prod-assistant\prod_assistant\mcp_servers\product_search_server.py"
+                ],
+                "transport": "stdio",
             }
-        )
+        })
 
         # Build workflow
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile(checkpointer=self.checkpointer)
 
-        # Load MCP tools asynchronously
-        asyncio.run(self._safe_async_init())
-
-    async def async_init(self):
-        """Load MCP tools asynchronously."""
-        self.mcp_tools = await self.mcp_client.get_tools()
-
-    async def _safe_async_init(self):
-        """Safe async init wrapper (prevents event loop crash)."""
+    async def initialize_mcp(self):
+        """Load MCP tools asynchronously - call this before running queries."""
         try:
+            print("Loading MCP tools...")
             self.mcp_tools = await self.mcp_client.get_tools()
-            print("MCP tools loaded successfully.")
+            print(f"✓ MCP tools loaded: {[t.name for t in self.mcp_tools]}")
         except Exception as e:
-            print(f"Warning: Failed to load MCP tools — {e}")
+            print(f"✗ Warning: Failed to load MCP tools — {e}")
             self.mcp_tools = []
 
-    # ---------- Nodes ----------
     def _ai_assistant(self, state: AgentState):
         print("--- CALL ASSISTANT ---")
         messages = state["messages"]
         last_message = messages[-1].content
 
-        if any(word in last_message.lower() for word in ["price", "review", "product"]):
+        if any(word in last_message.lower() for word in ["price", "review", "product", "iphone", "samsung"]):
             return {"messages": [HumanMessage(content="TOOL: retriever")]}
         else:
             prompt = ChatPromptTemplate.from_template(
@@ -91,11 +89,18 @@ class AgenticRAG:
     async def _web_search(self, state: AgentState):
         print("--- WEB SEARCH (MCP) ---")
         query = state["messages"][-1].content
-        tool = next(t for t in self.mcp_tools if t.name == "web_search")
-        result = await tool.ainvoke({"query": query})  # ✅
-        context = result if result else "No data from web"
+        tool = next((t for t in self.mcp_tools if t.name == "web_search"), None)
+        
+        if not tool:
+            return {"messages": [HumanMessage(content="Web search tool not found.")]}
+        
+        try:
+            result = await tool.ainvoke({"query": query})
+            context = result if result else "No data from web"
+        except Exception as e:
+            context = f"Error during web search: {e}"
+        
         return {"messages": [HumanMessage(content=context)]}
-
 
     def _grade_documents(self, state: AgentState) -> Literal["generator", "rewriter"]:
         print("--- GRADER ---")
@@ -145,7 +150,6 @@ class AgenticRAG:
 
         return {"messages": [HumanMessage(content=new_q)]}
 
-    # ---------- Build Workflow ----------
     def _build_workflow(self):
         workflow = StateGraph(self.AgentState)
         workflow.add_node("Assistant", self._ai_assistant)
@@ -154,7 +158,6 @@ class AgenticRAG:
         workflow.add_node("Rewriter", self._rewrite)
         workflow.add_node("WebSearch", self._web_search)
 
-        # Workflow edges
         workflow.add_edge(START, "Assistant")
         workflow.add_conditional_edges(
             "Assistant",
@@ -172,7 +175,6 @@ class AgenticRAG:
 
         return workflow
 
-    # ---------- Public Run ----------
     async def run(self, query: str, thread_id: str = "default_thread") -> str:
         """Run the workflow for a given query and return the final answer."""
         result = await self.app.ainvoke(
@@ -181,8 +183,30 @@ class AgenticRAG:
         )
         return result["messages"][-1].content
 
+
 # ---------- Standalone Test ----------
 if __name__ == "__main__":
-    rag_agent = AgenticRAG()
-    answer = rag_agent.run("What is the price of iPhone 16?")
-    print("\nFinal Answer:\n", answer)
+    async def main():
+        rag_agent = AgenticRAG()
+        
+        # Initialize MCP tools first
+        await rag_agent.initialize_mcp()
+        
+        # Run queries
+        queries = [
+            "What is the price of iPhone 16?",
+            "Tell me about iPhone 15 reviews",
+            "What is iPhone 17?"  # Should trigger web search
+        ]
+        
+        for query in queries:
+            print(f"\n{'='*60}")
+            print(f"Query: {query}")
+            print('='*60)
+            
+            answer = await rag_agent.run(query)
+            print("\nFinal Answer:")
+            print(answer)
+            print()
+    
+    asyncio.run(main())

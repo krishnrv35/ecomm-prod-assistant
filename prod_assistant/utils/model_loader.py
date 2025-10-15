@@ -10,6 +10,9 @@ from logger import GLOBAL_LOGGER as log
 from exception.custom_exception import ProductAssistantException
 import asyncio
 
+# Load environment variables at module level
+load_dotenv()
+
 
 class ApiKeyManager:
     def __init__(self):
@@ -51,6 +54,13 @@ class ModelLoader:
         try:
             model_name = self.config["embedding_model"]["model_name"]
             log.info("Loading embedding model", model=model_name)
+            
+            api_key = self.api_key_mgr.get("GOOGLE_API_KEY")
+            
+            # Debug: Check if API key exists
+            if not api_key:
+                log.error("GOOGLE_API_KEY is None or empty in load_embeddings()")
+                raise ValueError("GOOGLE_API_KEY not found. Please check your .env file.")
 
             # Patch: Ensure an event loop exists for gRPC aio
             try:
@@ -60,7 +70,7 @@ class ModelLoader:
 
             return GoogleGenerativeAIEmbeddings(
                 model=model_name,
-                google_api_key=self.api_key_mgr.get("GOOGLE_API_KEY")  # type: ignore
+                google_api_key=api_key  # type: ignore
             )
         except Exception as e:
             log.error("Error loading embedding model", error=str(e))

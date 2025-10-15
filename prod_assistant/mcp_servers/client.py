@@ -1,37 +1,53 @@
 import asyncio
+import sys
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+# Fix for Windows asyncio subprocess issues
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 async def main():
     client = MultiServerMCPClient({
         "hybrid_search": {   # server name
             "command": "python",
             "args": [
-                r"D:\complete_content_new\llmops-batch\ecomm-prod-assistant\prod_assistant\mcp_servers\product_search_server.py"
+                r"C:\Users\ravik\llmops\ecomm-prod-assistant\prod_assistant\mcp_servers\product_search_server.py"
             ],  # absolute path
             "transport": "stdio",
         }
     })
 
-    # Discover tools
-    tools = await client.get_tools()
-    print("Available tools:", [t.name for t in tools])
+    try:
+        # Discover tools
+        tools = await client.get_tools()
+        print("Available tools:", [t.name for t in tools])
 
-    # Pick tools by name
-    retriever_tool = next(t for t in tools if t.name == "get_product_info")
-    web_tool = next(t for t in tools if t.name == "web_search")
+        # Pick tools by name
+        retriever_tool = next(t for t in tools if t.name == "get_product_info")
+        web_tool = next(t for t in tools if t.name == "web_search")
 
-    # --- Step 1: Try retriever first ---
-    #query = "Samsung Galaxy S25 price"
-    # query = "iPhone 15"
-    query = "iPhone 17?"
-    retriever_result = await retriever_tool.ainvoke({"query": query})
-    print("\nRetriever Result:\n", retriever_result)
+        # --- Step 1: Try retriever first ---
+        #query = "Samsung Galaxy S25 price"
+        # query = "iPhone 15"
+        query = "iPhone 17 price comaprison"
+        retriever_result = await retriever_tool.ainvoke({"query": query})
+        print("\nRetriever Result:\n", retriever_result)
 
-    # --- Step 2: Fallback to web search if retriever fails ---
-    if not retriever_result.strip() or "No local results found." in retriever_result:
-        print("\n No local results, falling back to web search...\n")
-        web_result = await web_tool.ainvoke({"query": query})
-        print("Web Search Result:\n", web_result)
+        # --- Step 2: Fallback to web search if retriever fails ---
+        if not retriever_result.strip() or "No local results found." in retriever_result:
+            print("\n No local results, falling back to web search...\n")
+            web_result = await web_tool.ainvoke({"query": query})
+            print("Web Search Result:\n", web_result)
+    
+    finally:
+        # Proper cleanup: close the MCP client connections
+        if hasattr(client, 'close'):
+            await client.close()
+        elif hasattr(client, 'cleanup'):
+            await client.cleanup()
+        
+        # Give asyncio time to clean up subprocess transports
+        await asyncio.sleep(0.1)
 
 if __name__ == "__main__":
     asyncio.run(main())
