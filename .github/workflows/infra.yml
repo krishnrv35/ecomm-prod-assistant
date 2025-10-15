@@ -19,6 +19,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Check and handle ROLLBACK_COMPLETE state
+      - name: Check Stack Status
+        id: check-stack
+        run: |
+          STACK_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name product-assistant-cluster \
+            --region ${{ secrets.AWS_REGION }} \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          
+          echo "Stack status: $STACK_STATUS"
+          echo "status=$STACK_STATUS" >> $GITHUB_OUTPUT
+
+      # Delete stack if in ROLLBACK_COMPLETE state
+      - name: Delete Stack if in ROLLBACK_COMPLETE
+        if: steps.check-stack.outputs.status == 'ROLLBACK_COMPLETE'
+        run: |
+          echo "Stack is in ROLLBACK_COMPLETE state. Deleting..."
+          aws cloudformation delete-stack \
+            --stack-name product-assistant-cluster \
+            --region ${{ secrets.AWS_REGION }}
+          
+          echo "Waiting for stack deletion to complete..."
+          aws cloudformation wait stack-delete-complete \
+            --stack-name product-assistant-cluster \
+            --region ${{ secrets.AWS_REGION }}
+          
+          echo "Stack deleted successfully"
+
       # Deploy CloudFormation Stack
       - name: Deploy CloudFormation Stack
         run: |
