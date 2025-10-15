@@ -35,19 +35,18 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Set Image Tag
-        id: image-tag
+      # Set environment variables for the entire job
+      - name: Set Environment Variables
         run: |
+          echo "REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
           echo "IMAGE_TAG=$(date +%s)" >> $GITHUB_ENV
-          echo "::set-output name=tag::$(date +%s)"
       
       # Build, tag and push Docker image to ECR
       - name: Build and Push Docker image
         env:
-          REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
+          echo "Building image: $REGISTRY/$REPOSITORY:$IMAGE_TAG"
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -t $REGISTRY/$REPOSITORY:latest .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
           docker push $REGISTRY/$REPOSITORY:latest
@@ -92,11 +91,11 @@ jobs:
       - name: Create Kubernetes secret for API keys
         run: |
           kubectl create secret generic product-assistant-secrets \
-            --from-literal=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
-            --from-literal=GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }} \
-            --from-literal=ASTRA_DB_API_ENDPOINT=${{ secrets.ASTRA_DB_API_ENDPOINT }} \
-            --from-literal=ASTRA_DB_APPLICATION_TOKEN=${{ secrets.ASTRA_DB_APPLICATION_TOKEN }} \
-            --from-literal=ASTRA_DB_KEYSPACE=${{ secrets.ASTRA_DB_KEYSPACE }} \
+            --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --from-literal=GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}" \
+            --from-literal=ASTRA_DB_API_ENDPOINT="${{ secrets.ASTRA_DB_API_ENDPOINT }}" \
+            --from-literal=ASTRA_DB_APPLICATION_TOKEN="${{ secrets.ASTRA_DB_APPLICATION_TOKEN }}" \
+            --from-literal=ASTRA_DB_KEYSPACE="${{ secrets.ASTRA_DB_KEYSPACE }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # Deploy manifests
@@ -107,12 +106,9 @@ jobs:
 
       - name: Patch deployment with new image tag
         env:
-          REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
           kubectl set image deployment/product-assistant product-assistant=$REGISTRY/$REPOSITORY:$IMAGE_TAG
-
 
       # Verify rollout
       - name: Verify Deployment
