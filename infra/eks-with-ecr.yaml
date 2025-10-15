@@ -10,7 +10,8 @@ Parameters:
     Default: t3.small
   DesiredCapacity:
     Type: Number
-    Default: 3
+    MaxSize:3
+    MinSize:1
   ECRRepositoryName:
     Type: String
     Default: product-assistant
