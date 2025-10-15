@@ -13,6 +13,7 @@ Parameters:
     Default: 1
     MinValue: 1
     MaxValue: 3
+    Description: Desired number of worker nodes
   ECRRepositoryName:
     Type: String
     Default: product-assistant
