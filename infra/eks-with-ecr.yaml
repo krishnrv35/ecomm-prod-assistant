@@ -104,7 +104,6 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   ### --- ECR Repository ---
-
   ProductAssistantECR:
     Type: AWS::ECR::Repository
     Properties:
@@ -156,10 +155,10 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
 
-    ### --- EKS NodeGroup ---
+  ### --- EKS NodeGroup ---
   NodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn: EKSCluster   # ensures cluster is ready
+    DependsOn: EKSCluster
     Properties:
       ClusterName: !Ref ClusterName
       NodeRole: !GetAtt NodeGroupRole.Arn
@@ -172,7 +171,6 @@ Resources:
         MinSize: 1
       InstanceTypes:
         - !Ref NodeInstanceType
-
 
 Outputs:
   ECRRepositoryUri:
