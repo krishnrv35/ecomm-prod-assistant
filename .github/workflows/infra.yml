@@ -50,9 +50,36 @@ jobs:
 
       # Deploy CloudFormation Stack
       - name: Deploy CloudFormation Stack
+        id: deploy
+        continue-on-error: true
         run: |
           aws cloudformation deploy \
             --stack-name product-assistant-cluster \
             --template-file infra/eks-with-ecr.yaml \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --region ${{ secrets.AWS_REGION }}
+
+      # Show stack events if deployment failed
+      - name: Show Stack Events on Failure
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          echo "=== CloudFormation Stack Events ==="
+          aws cloudformation describe-stack-events \
+            --stack-name product-assistant-cluster \
+            --region ${{ secrets.AWS_REGION }} \
+            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+            --output table
+          
+          echo ""
+          echo "=== All Recent Events ==="
+          aws cloudformation describe-stack-events \
+            --stack-name product-assistant-cluster \
+            --region ${{ secrets.AWS_REGION }} \
+            --max-items 20 \
+            --query 'StackEvents[].[Timestamp,ResourceType,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+            --output table
+
+      # Fail the job if deployment failed
+      - name: Check Deployment Result
+        if: steps.deploy.outcome == 'failure'
+        run: exit 1
