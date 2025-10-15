@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Standalone EKS Cluster with NodeGroup and ECR Repository
+Description: Cost-Optimized EKS Cluster with NodeGroup and ECR Repository
 
 Parameters:
   ClusterName:
@@ -10,7 +10,7 @@ Parameters:
     Default: t3.micro
   DesiredCapacity:
     Type: Number
-    Default: 2
+    Default: 1
   ECRRepositoryName:
     Type: String
     Default: product-assistant
@@ -111,6 +111,24 @@ Resources:
       ImageScanningConfiguration:
         ScanOnPush: true
       ImageTagMutability: MUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only 3 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 3
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
 
   ### --- IAM Role for EKS Cluster ---
   EKSClusterRole:
@@ -167,7 +185,7 @@ Resources:
         - !Ref PublicSubnet2
       ScalingConfig:
         DesiredSize: !Ref DesiredCapacity
-        MaxSize: 3
+        MaxSize: 2
         MinSize: 1
       InstanceTypes:
         - !Ref NodeInstanceType
